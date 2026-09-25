@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Solitaire
+Name[ru]=Косынка
+GenericName=Card Game
+GenericName[ru]=Карточная игра
+Comment=Classic Klondike solitaire
+Comment[ru]=Классический пасьянс «Косынка»
+Exec=solitaire-linux
+Icon=solitaire-linux
+Terminal=false
+Categories=Game;CardGame;
+Keywords=solitaire;klondike;cards;пасьянс;косынка;карты;
+StartupWMClass=Solitaire-linux
