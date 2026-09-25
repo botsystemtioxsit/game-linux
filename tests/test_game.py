@@ -1,6 +1,6 @@
 import unittest
 
-from solitaire.game import FOUNDATION, TABLEAU, WASTE, Card, Game
+from solitaire.game import DRAW_HINT, FOUNDATION, TABLEAU, WASTE, Card, Game
 
 
 def empty_game(draw_count=1):
@@ -99,6 +99,36 @@ class RulesTest(unittest.TestCase):
         self.assertTrue(g.is_won())
         self.assertTrue(all(len(f) == 13 for f in g.foundations))
         self.assertEqual({f[0].suit for f in g.foundations}, {0, 1, 2, 3})
+
+
+class HintTest(unittest.TestCase):
+    def test_foundation_first(self):
+        g = empty_game()
+        g.tableau[0] = [Card(1, 0, True)]
+        g.tableau[1] = [Card(9, 0, True)]
+        g.tableau[2] = [Card(8, 1, True)]
+        self.assertEqual(g.hint(), ((TABLEAU, 0), 0, (FOUNDATION, 0)))
+
+    def test_reveal_move(self):
+        g = empty_game()
+        g.tableau[0] = [Card(2, 2, False), Card(8, 1, True)]
+        g.tableau[1] = [Card(9, 0, True)]
+        self.assertEqual(g.hint(), ((TABLEAU, 0), 1, (TABLEAU, 1)))
+
+    def test_waste_then_draw_then_nothing(self):
+        g = empty_game()
+        g.tableau[0] = [Card(9, 0, True)]
+        g.waste = [Card(8, 1, True)]
+        self.assertEqual(g.hint(), ((WASTE, 0), 0, (TABLEAU, 0)))
+        g.waste = [Card(5, 1, True)]
+        self.assertEqual(g.hint(), DRAW_HINT)
+        g.waste = []
+        self.assertIsNone(g.hint())
+
+    def test_no_pointless_king_move(self):
+        g = empty_game()
+        g.tableau[0] = [Card(13, 0, True)]
+        self.assertIsNone(g.hint())
 
 
 if __name__ == "__main__":

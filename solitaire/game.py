@@ -245,6 +245,44 @@ class Game:
     def is_won(self) -> bool:
         return all(len(f) == 13 for f in self.foundations)
 
+    def hint(self) -> tuple[Pile, int, Pile] | str | None:
+        """Подсказка: (откуда, с какой карты, куда), DRAW_HINT — открыть колоду,
+        None — ходов нет."""
+        waste = (WASTE, 0)
+        columns = [(TABLEAU, i) for i in range(7)]
+        foundations = [(FOUNDATION, i) for i in range(4)]
+
+        # 1. Любая карта, которую можно отправить в дом.
+        for src in [waste] + columns:
+            dest = self.foundation_target(src)
+            if dest:
+                return src, len(self.pile(src)) - 1, dest
+
+        # 2. Перенос в раскладке, который открывает закрытую карту
+        #    (или освобождает колонку, если на неё есть король).
+        for src in columns:
+            cards = self.pile(src)
+            first_up = next((i for i, c in enumerate(cards) if c.face_up), None)
+            if first_up is None or (first_up == 0 and cards[0].rank == 13):
+                continue
+            for dest in columns:
+                if self.can_move(src, first_up, dest):
+                    return src, first_up, dest
+
+        # 3. Карта из сброса в раскладку.
+        if self.waste:
+            dest = self.best_target(waste, len(self.waste) - 1)
+            if dest and dest not in foundations:
+                return waste, len(self.waste) - 1, dest
+
+        # 4. Открыть новые карты из колоды.
+        if self.stock or self.waste:
+            return DRAW_HINT
+        return None
+
+
+DRAW_HINT = "draw"
+
 
 def _stacks_on(card: Card, below: Card) -> bool:
     return card.face_up and card.red != below.red and card.rank == below.rank - 1

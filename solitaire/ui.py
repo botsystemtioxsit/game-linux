@@ -29,6 +29,7 @@ from solitaire.game import (
     SUITS,
     TABLEAU,
     WASTE,
+    DRAW_HINT,
     Card,
     Game,
     Pile,
@@ -113,6 +114,7 @@ class SolitaireApp:
         self.drag: dict | None = None
         self.celebrating = False
         self.anim_job: str | None = None
+        self.hint_job: str | None = None
         self.started_at: float | None = None
         self.elapsed = 0.0
 
@@ -127,7 +129,8 @@ class SolitaireApp:
         root.bind("<Control-r>", lambda e: self.restart())
         root.bind("<Control-z>", lambda e: self.undo())
         root.bind("<BackSpace>", lambda e: self.undo())
-        root.bind("<space>", lambda e: self.deal_from_stock())
+        root.bind("<KeyPress>", self.on_letter_key)
+        root.bind("<space>", lambda e: self.show_hint())
         root.bind("<Control-q>", lambda e: self.quit())
         root.protocol("WM_DELETE_WINDOW", self.quit)
 
@@ -150,7 +153,10 @@ class SolitaireApp:
         game_menu.add_command(label="Новая игра", accelerator="F2", command=self.new_game)
         game_menu.add_command(label="Начать эту раздачу заново", accelerator="Ctrl+R", command=self.restart)
         game_menu.add_separator()
-        game_menu.add_command(label="Отменить ход", accelerator="Ctrl+Z", command=self.undo)
+        game_menu.add_command(label="Отменить ход", accelerator="M", command=self.undo)
+        game_menu.add_command(label="Открыть карту из колоды", accelerator="N", command=self.deal_from_stock)
+        game_menu.add_command(label="Положить карту из сброса", accelerator="B", command=self.place_waste_card)
+        game_menu.add_command(label="Подсказка", accelerator="Пробел", command=self.show_hint)
         game_menu.add_command(label="Собрать карты в дом", accelerator="ПКМ", command=self.collect)
         game_menu.add_separator()
         game_menu.add_command(label="Статистика", command=self.show_stats)
@@ -209,6 +215,67 @@ class SolitaireApp:
             return
         if self.game.draw():
             self.after_move()
+
+    def on_letter_key(self, event) -> None:
+        """N, B и M работают в любой раскладке (в русской это Т, И и Ь)."""
+        if event.state & 0x4:  # с Ctrl — это другие сочетания
+            return
+        keysym = event.keysym.lower()
+        actions = {"n": self.deal_from_stock, "b": self.place_waste_card, "m": self.undo}
+        if keysym not in actions:
+            if len(keysym) == 1 and keysym.isascii():
+                return  # другая латинская буква
+            # Нелатинская раскладка: узнаём клавишу по её положению (коды X11).
+            keysym = {57: "n", 56: "b", 58: "m"}.get(event.keycode, "")
+        if keysym in actions:
+            actions[keysym]()
+
+    def place_waste_card(self) -> None:
+        """Положить открытую карту из сброса туда, куда она подходит."""
+        if self.celebrating or self.anim_job or not self.game.waste:
+            return
+        src, index = (WASTE, 0), len(self.game.waste) - 1
+        dest = self.game.best_target(src, index)
+        if dest and self.game.move(src, index, dest):
+            self.after_move()
+        else:
+            self.root.bell()
+
+    def show_hint(self) -> None:
+        if self.celebrating or self.anim_job or self.game.is_won():
+            return
+        self.canvas.delete("hint")
+        if self.hint_job:
+            self.root.after_cancel(self.hint_job)
+        hint = self.game.hint()
+        if hint is None:
+            w, h = self.canvas.winfo_width(), self.canvas.winfo_height()
+            self.canvas.create_rectangle(w / 2 - 170, h / 2 - 34, w / 2 + 170, h / 2 + 34,
+                                         fill=TABLE_DARK, outline=HIGHLIGHT, width=2, tags="hint")
+            self.canvas.create_text(w / 2, h / 2, text="Ходов больше нет", fill="white",
+                                    font=(FONT, -24, "bold"), tags="hint")
+        elif hint == DRAW_HINT:
+            self.highlight(self.pile_rects[(STOCK, 0)])
+        else:
+            src, index, dest = hint
+            boxes = [b for b in self.hitboxes if b[0] == src and b[1] >= index]
+            self.highlight((boxes[0][2], boxes[0][3], boxes[-1][4], boxes[-1][5]))
+            dest_boxes = [b for b in self.hitboxes if b[0] == dest]
+            if dest_boxes:
+                self.highlight(dest_boxes[-1][2:])
+            else:
+                x1, y1, x2, _ = self.pile_rects[dest]
+                self.highlight((x1, y1, x2, y1 + self.card_h))
+        self.hint_job = self.root.after(1500, self.clear_hint)
+
+    def clear_hint(self) -> None:
+        self.hint_job = None
+        self.canvas.delete("hint")
+
+    def highlight(self, rect) -> None:
+        x1, y1, x2, y2 = rect
+        self.canvas.create_rectangle(x1 - 3, y1 - 3, x2 + 3, y2 + 3, outline=HIGHLIGHT,
+                                     width=4, tags="hint")
 
     def collect(self) -> None:
         if self.celebrating or self.anim_job:
@@ -600,8 +667,10 @@ class SolitaireApp:
             "• Перетаскивайте карты мышью.\n"
             "• Двойной щелчок — отправить карту в дом или на подходящее место.\n"
             "• Правая кнопка мыши — собрать всё возможное в дом.\n"
-            "• Пробел — открыть карту из колоды.\n"
-            "• Ctrl+Z или Backspace — отменить ход.\n"
+            "• N — открыть карту из колоды.\n"
+            "• B — положить карту из сброса туда, куда она подходит.\n"
+            "• M, Ctrl+Z или Backspace — отменить ход.\n"
+            "• Пробел — подсказка.\n"
             "• F2 — новая игра, Ctrl+R — сыграть раздачу заново.",
             parent=self.root,
         )
