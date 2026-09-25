@@ -22,6 +22,8 @@ except ImportError:  # pragma: no cover - зависит от системы
     raise SystemExit(1)
 
 from solitaire import __version__
+from solitaire.appearance import AppearanceDialog
+from solitaire.theme import SUIT_KEYS, merge_colors
 from solitaire.game import (
     FOUNDATION,
     RANKS,
@@ -35,15 +37,6 @@ from solitaire.game import (
     Pile,
 )
 
-TABLE_COLOR = "#0b6e35"
-TABLE_DARK = "#08572a"
-CARD_FACE = "#fdfdf8"
-CARD_EDGE = "#6b6b6b"
-BACK_COLOR = "#1f4fa8"
-BACK_INNER = "#3a6fd1"
-RED = "#c8102e"
-BLACK = "#1a1a1a"
-HIGHLIGHT = "#ffd84d"
 FONT = "DejaVu Sans"
 
 MARGIN = 16
@@ -91,15 +84,17 @@ class SolitaireApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.settings = load_settings()
+        self.colors = merge_colors(self.settings.get("colors"))
         root.title("Косынка")
         root.geometry("980x720")
         root.minsize(560, 420)
         self._set_icon()
 
-        self.canvas = tk.Canvas(root, bg=TABLE_COLOR, highlightthickness=0)
+        self.canvas = tk.Canvas(root, bg=self.colors["table"], highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         self.status = tk.Label(
-            root, anchor="w", padx=10, pady=3, bg=TABLE_DARK, fg="white", font=(FONT, 10)
+            root, anchor="w", padx=10, pady=3, bg=self.colors["status_bg"],
+            fg=self.colors["status_fg"], font=(FONT, 10)
         )
         self.status.pack(fill=tk.X, side=tk.BOTTOM)
 
@@ -168,6 +163,8 @@ class SolitaireApp:
         opts.add_radiobutton(label="Сдавать по 1 карте", variable=self.draw_var, value=1, command=self.change_draw)
         opts.add_radiobutton(label="Сдавать по 3 карты", variable=self.draw_var, value=3, command=self.change_draw)
         opts.add_separator()
+        opts.add_command(label="Оформление…", command=self.open_appearance)
+        opts.add_separator()
         opts.add_checkbutton(
             label="Автоматически доигрывать", variable=self.auto_var, command=self.change_auto
         )
@@ -198,6 +195,18 @@ class SolitaireApp:
             "Косынка", "Начать новую игру с новыми правилами сдачи?", parent=self.root
         ):
             self.new_game()
+
+    def open_appearance(self) -> None:
+        if not self.celebrating:
+            AppearanceDialog(self.root, self.colors, self.set_colors)
+
+    def set_colors(self, colors: dict) -> None:
+        self.colors = colors
+        self.settings["colors"] = colors
+        save_settings(self.settings)
+        self.canvas.config(bg=colors["table"])
+        self.status.config(bg=colors["status_bg"], fg=colors["status_fg"])
+        self.redraw()
 
     def change_auto(self) -> None:
         self.settings["auto_finish"] = self.auto_var.get()
@@ -251,8 +260,9 @@ class SolitaireApp:
         if hint is None:
             w, h = self.canvas.winfo_width(), self.canvas.winfo_height()
             self.canvas.create_rectangle(w / 2 - 170, h / 2 - 34, w / 2 + 170, h / 2 + 34,
-                                         fill=TABLE_DARK, outline=HIGHLIGHT, width=2, tags="hint")
-            self.canvas.create_text(w / 2, h / 2, text="Ходов больше нет", fill="white",
+                                         fill=self.colors["slot"], outline=self.colors["highlight"],
+                                         width=2, tags="hint")
+            self.canvas.create_text(w / 2, h / 2, text="Ходов больше нет", fill=self.colors["status_fg"],
                                     font=(FONT, -24, "bold"), tags="hint")
         elif hint == DRAW_HINT:
             self.highlight(self.pile_rects[(STOCK, 0)])
@@ -274,7 +284,7 @@ class SolitaireApp:
 
     def highlight(self, rect) -> None:
         x1, y1, x2, y2 = rect
-        self.canvas.create_rectangle(x1 - 3, y1 - 3, x2 + 3, y2 + 3, outline=HIGHLIGHT,
+        self.canvas.create_rectangle(x1 - 3, y1 - 3, x2 + 3, y2 + 3, outline=self.colors["highlight"],
                                      width=4, tags="hint")
 
     def collect(self) -> None:
@@ -450,10 +460,11 @@ class SolitaireApp:
 
     def draw_slot(self, x: float, y: float, label: str) -> None:
         cw, ch = self.card_w, self.card_h
-        self.rounded_rect(x, y, x + cw, y + ch, cw * 0.08, fill=TABLE_DARK, outline="#2f8f57", width=2)
+        self.rounded_rect(x, y, x + cw, y + ch, cw * 0.08, fill=self.colors["slot"],
+                         outline=self.colors["slot_mark"], width=2)
         if label:
             self.canvas.create_text(
-                x + cw / 2, y + ch / 2, text=label, fill="#2f8f57", font=(FONT, -int(cw * 0.45), "bold")
+                x + cw / 2, y + ch / 2, text=label, fill=self.colors["slot_mark"], font=(FONT, -int(cw * 0.45), "bold")
             )
 
     def draw_card(self, card: Card | None, x: float, y: float, face_up: bool | None = None,
@@ -464,16 +475,18 @@ class SolitaireApp:
         up = card.face_up if face_up is None and card else bool(face_up)
         r = cw * 0.08
         if not up:
-            self.rounded_rect(x, y, x + cw, y + ch, r, fill=BACK_COLOR, outline=CARD_EDGE, tags=tags)
+            self.rounded_rect(x, y, x + cw, y + ch, r, fill=self.colors["back"],
+                             outline=self.colors["card_edge"], tags=tags)
             p = cw * 0.09
-            self.rounded_rect(x + p, y + p, x + cw - p, y + ch - p, r * 0.6, fill=BACK_INNER,
-                              outline="#dfe8ff", width=1, tags=tags)
-            c.create_text(x + cw / 2, y + ch / 2, text="❖", fill="#dfe8ff",
+            self.rounded_rect(x + p, y + p, x + cw - p, y + ch - p, r * 0.6, fill=self.colors["back_inner"],
+                              outline=self.colors["back_pattern"], width=1, tags=tags)
+            c.create_text(x + cw / 2, y + ch / 2, text="❖", fill=self.colors["back_pattern"],
                           font=(FONT, -int(cw * 0.5)), tags=tags)
             return
-        color = RED if card.red else BLACK
+        color = self.colors[SUIT_KEYS[card.suit]]
         rank, suit = RANKS[card.rank], SUITS[card.suit]
-        self.rounded_rect(x, y, x + cw, y + ch, r, fill=CARD_FACE, outline=CARD_EDGE, tags=tags)
+        self.rounded_rect(x, y, x + cw, y + ch, r, fill=self.colors["card_face"],
+                         outline=self.colors["card_edge"], tags=tags)
         small = -max(10, int(cw * 0.22))
         c.create_text(x + cw * 0.06, y + ch * 0.02, text=rank, anchor="nw", fill=color,
                       font=(FONT, small, "bold"), tags=tags)
