@@ -47,6 +47,7 @@ CONFIG_FILE = CONFIG_DIR / "settings.json"
 DEFAULT_SETTINGS = {
     "draw_count": 1,
     "auto_finish": True,
+    "splash": True,
     "played": 0,
     "won": 0,
     "best_time": None,
@@ -100,6 +101,8 @@ class SolitaireApp:
 
         self.draw_var = tk.IntVar(value=self.settings["draw_count"])
         self.auto_var = tk.BooleanVar(value=self.settings["auto_finish"])
+        self.splash_var = tk.BooleanVar(value=self.settings["splash"])
+        self.splash_start: float | None = None
         self._build_menu()
 
         self.card_w = 90
@@ -168,6 +171,9 @@ class SolitaireApp:
         opts.add_checkbutton(
             label="Автоматически доигрывать", variable=self.auto_var, command=self.change_auto
         )
+        opts.add_checkbutton(
+            label="Заставка при запуске", variable=self.splash_var, command=self.change_splash
+        )
         menubar.add_cascade(label="Настройки", menu=opts)
 
         help_menu = tk.Menu(menubar, tearoff=False)
@@ -208,6 +214,10 @@ class SolitaireApp:
         self.status.config(bg=colors["status_bg"], fg=colors["status_fg"])
         self.redraw()
 
+    def change_splash(self) -> None:
+        self.settings["splash"] = self.splash_var.get()
+        save_settings(self.settings)
+
     def change_auto(self) -> None:
         self.settings["auto_finish"] = self.auto_var.get()
         save_settings(self.settings)
@@ -227,6 +237,9 @@ class SolitaireApp:
 
     def on_letter_key(self, event) -> None:
         """N, B и M работают в любой раскладке (в русской это Т, И и Ь)."""
+        if self.splash_start is not None:
+            self.end_splash()
+            return
         if event.state & 0x4:  # с Ctrl — это другие сочетания
             return
         keysym = event.keysym.lower()
@@ -385,6 +398,9 @@ class SolitaireApp:
     def redraw(self) -> None:
         if self.celebrating:
             return
+        if self.splash_start is not None:
+            self.draw_splash(time.monotonic() - self.splash_start)
+            return
         c = self.canvas
         c.delete("all")
         self.layout()
@@ -508,6 +524,9 @@ class SolitaireApp:
         return None
 
     def on_press(self, event) -> None:
+        if self.splash_start is not None:
+            self.end_splash()
+            return
         if self.celebrating:
             self.finish_celebration()
             return
@@ -655,6 +674,65 @@ class SolitaireApp:
             self.root.after_cancel(self.anim_job)
             self.anim_job = None
         self.celebrating = False
+        self.splash_start = None
+
+    # ------------------------------------------------------------------ заставка
+    SPLASH_SECONDS = 3.2
+
+    def start_splash(self) -> None:
+        self.splash_start = time.monotonic()
+        self.anim_job = self.root.after(16, self.splash_step)
+
+    def splash_step(self) -> None:
+        self.anim_job = None
+        t = time.monotonic() - self.splash_start
+        if t >= self.SPLASH_SECONDS:
+            self.end_splash()
+            return
+        self.draw_splash(t)
+        self.anim_job = self.root.after(16, self.splash_step)
+
+    def end_splash(self) -> None:
+        self.stop_animation()
+        self.redraw()
+
+    def draw_splash(self, t: float) -> None:
+        c = self.canvas
+        c.delete("all")
+        self.layout()
+        w = max(c.winfo_width(), 200)
+        h = max(c.winfo_height(), 200)
+        cw, ch = self.card_w, self.card_h
+        cx, cy = w / 2, h * 0.32
+
+        def ease(start: float, length: float) -> float:
+            k = min(1.0, max(0.0, (t - start) / length))
+            return 1 - (1 - k) ** 3
+
+        # Четыре туза вылетают снизу и раскладываются веером.
+        for i, suit in enumerate((0, 1, 3, 2)):
+            k = ease(0.1 + i * 0.12, 0.7)
+            offset = (i - 1.5) * cw * 0.62
+            x = cx - cw / 2 + offset * k
+            y = h + ch - (h + ch - (cy - ch / 2 + abs(i - 1.5) * ch * 0.08)) * k
+            self.draw_card(Card(1, suit, True), x, y)
+
+        title_size = -max(28, int(min(w, h) * 0.09))
+        title_y = cy + ch * 0.62 - title_size * 0.75
+        if t > 0.8:
+            lift = (1 - ease(0.8, 0.5)) * 30
+            c.create_text(cx + 3, title_y + 3 + lift, text="Косынка",
+                          fill=self.colors["slot"], font=(FONT, title_size, "bold"))
+            c.create_text(cx, title_y + lift, text="Косынка",
+                          fill=self.colors["card_face"], font=(FONT, title_size, "bold"))
+        if t > 1.3:
+            lift = (1 - ease(1.3, 0.5)) * 20
+            c.create_text(cx, title_y - title_size * 1.1 + lift,
+                          text="Сделал Claude × TIOXSIT", fill=self.colors["highlight"],
+                          font=(FONT, -max(16, int(-title_size * 0.42)), "bold"))
+        if t > 1.9:
+            c.create_text(cx, h - MARGIN * 2, text="Щёлкните или нажмите любую клавишу",
+                          fill=self.colors["slot_mark"], font=(FONT, -14))
 
     # ------------------------------------------------------------------ окна
     def show_stats(self) -> None:
@@ -692,7 +770,7 @@ class SolitaireApp:
         messagebox.showinfo(
             "О программе",
             f"Косынка (Klondike Solitaire) {__version__}\n\nКлассический пасьянс для Linux.\n"
-            "Написан на Python и Tkinter.",
+            "Сделал Claude × TIOXSIT.\nНаписан на Python и Tkinter.",
             parent=self.root,
         )
 
@@ -702,6 +780,8 @@ def main() -> None:
     app = SolitaireApp(root)
     if len(sys.argv) > 1 and sys.argv[1].isdigit():
         app.new_game(int(sys.argv[1]))
+    if app.settings["splash"]:
+        app.start_splash()
     root.mainloop()
 
 
