@@ -1,0 +1,28 @@
+name: Release .deb
+
+# Собирает пакет .deb и кладёт его в релиз с тегом «latest» под постоянным именем:
+# https://github.com/botsystemtioxsit/game-linux/releases/download/latest/solitaire-linux.deb
+# Эту ссылку использует каталог Ghost Shell Launcher.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Собрать .deb
+        run: |
+          bash build-deb.sh
+          cp dist/solitaire-linux_*_all.deb solitaire-linux.deb
+      - name: Выложить в релиз latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view latest >/dev/null 2>&1 || gh release create latest --title "Косынка для Linux — последняя сборка" --notes "Пакет .deb (Debian, Ubuntu, Linux Mint). Обновляется автоматически."
+          gh release upload latest solitaire-linux.deb --clobber
