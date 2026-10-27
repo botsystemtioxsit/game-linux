@@ -16,8 +16,8 @@ find "$PKG" -name "__pycache__" -type d -prune -exec rm -rf {} +
 printf '#!/bin/sh\ncd /usr/share/solitaire-linux && exec /usr/bin/python3 -B -m solitaire "$@"\n' > "$PKG/usr/bin/solitaire-linux"
 chmod 755 "$PKG/usr/bin/solitaire-linux"
 cp "$SRC/data/solitaire-linux.desktop" "$PKG/usr/share/applications/"
-cp "$SRC/data/solitaire-linux.png" "$PKG/usr/share/icons/hicolor/256x256/apps/"
-cp "$SRC/data/solitaire-linux.svg" "$PKG/usr/share/icons/hicolor/scalable/apps/"
+[ -f "$SRC/data/solitaire-linux.png" ] && cp "$SRC/data/solitaire-linux.png" "$PKG/usr/share/icons/hicolor/256x256/apps/"
+[ -f "$SRC/data/solitaire-linux.svg" ] && cp "$SRC/data/solitaire-linux.svg" "$PKG/usr/share/icons/hicolor/scalable/apps/"
 
 cat > "$PKG/DEBIAN/control" <<CONTROL
 Package: solitaire-linux

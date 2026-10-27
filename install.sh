@@ -72,8 +72,8 @@ chmod 755 "$PREFIX/bin/solitaire-linux"
 
 sed "s|^Exec=.*|Exec=$PREFIX/bin/solitaire-linux|" "$SRC/data/solitaire-linux.desktop" \
     > "$PREFIX/share/applications/solitaire-linux.desktop"
-cp "$SRC/data/solitaire-linux.png" "$PREFIX/share/icons/hicolor/256x256/apps/"
-cp "$SRC/data/solitaire-linux.svg" "$PREFIX/share/icons/hicolor/scalable/apps/"
+[ -f "$SRC/data/solitaire-linux.png" ] && cp "$SRC/data/solitaire-linux.png" "$PREFIX/share/icons/hicolor/256x256/apps/"
+[ -f "$SRC/data/solitaire-linux.svg" ] && cp "$SRC/data/solitaire-linux.svg" "$PREFIX/share/icons/hicolor/scalable/apps/"
 
 command -v update-desktop-database >/dev/null 2>&1 && \
     update-desktop-database "$PREFIX/share/applications" 2>/dev/null || true

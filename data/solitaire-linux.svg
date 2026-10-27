@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-  <rect x="8" y="8" width="240" height="240" rx="40" fill="#0b6e35"/>
-  <rect x="40" y="36" width="112" height="156" rx="12" fill="#1f4fa8" stroke="#dfe8ff" stroke-width="4"/>
-  <rect x="54" y="50" width="84" height="128" rx="8" fill="#3a6fd1"/>
-  <rect x="100" y="70" width="112" height="156" rx="12" fill="#fdfdf8" stroke="#6b6b6b" stroke-width="3"/>
-  <text x="112" y="108" font-family="DejaVu Sans, sans-serif" font-weight="bold" font-size="36" fill="#c8102e">A</text>
-  <text x="156" y="190" font-family="DejaVu Sans, sans-serif" font-size="80" fill="#c8102e" text-anchor="middle">♥</text>
-</svg>
